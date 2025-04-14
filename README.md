@@ -1,2 +1,2 @@
-# advancedsystemmontoring
+# CoreMonitor
 Advanced monitoring system dashboard
