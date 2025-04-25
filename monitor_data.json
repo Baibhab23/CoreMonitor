@@ -1,0 +1,14 @@
+{
+            "timestamp": "2025-04-25 15:46:15",
+            "cpu": "7.93",
+            "memory": {
+                "percent": "6.00",
+                "used": "1155.23",
+                "total": "18432"
+            },
+            "disk": "3%",
+            "network": {"en4":{"rx":"0 bytes","tx":"0 bytes"},"en5":{"rx":"0 bytes","tx":"0 bytes"},"en6":{"rx":"0 bytes","tx":"0 bytes"},"bridge0":{"rx":"0 bytes","tx":"0 bytes"},"en0":{"rx":"131445 bytes","tx":"1088325084 bytes"},"en1":{"rx":"0 bytes","tx":"0 bytes"},"en2":{"rx":"0 bytes","tx":"0 bytes"},"en3":{"rx":"0 bytes","tx":"0 bytes"}},
+            "battery": "",
+            "uptime": "3 days,  6:38, 1 user, load averages: 3.35 3.65 3.87",
+            "intrusions": "       0"
+        }
