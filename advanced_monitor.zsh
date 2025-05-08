@@ -193,12 +193,11 @@ monitor_process() {
         if [[ $? -eq 0 ]]; then
             echo "🛑 Stopping Process monitor."
             break
+        fi
 
         sleep $UPDATE_INTERVAL
     done
 }
-
-
 serve_web_dashboard() {
     echo "🔹 Starting Web Dashboard..."
     cd "$(dirname "$0")"
