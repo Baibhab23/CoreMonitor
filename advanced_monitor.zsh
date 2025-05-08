@@ -8,6 +8,7 @@ CPU_THRESHOLD=80
 MEMORY_THRESHOLD=80
 DISK_THRESHOLD=85
 PORT=8082
+# choice=0
 
 # Trap to clean up background processes on Ctrl+C or exit
 trap "echo '🛑 Exiting... Cleaning up...'; pkill -P $$; exit" SIGINT SIGTERM
@@ -93,7 +94,15 @@ monitor_cpu() {
     while true; do
         clear
         echo "🧠 Monitoring CPU..."
-        jq '.cpu' < $JSON_FILE
+        jq '.cpu' < "$JSON_FILE"
+
+        echo "\n⏳ Press [Enter] to stop monitoring or wait to continue..."
+        read -t 2 back  
+        if [[ $? -eq 0 ]]; then
+            echo "🛑 Stopping CPU monitor."
+            break
+        fi
+
         sleep $UPDATE_INTERVAL
     done
 }
@@ -103,6 +112,15 @@ monitor_memory() {
         clear
         echo "💾 Monitoring Memory..."
         jq '.memory' < $JSON_FILE
+
+        echo "\n⏳ Press [Enter] to stop monitoring or wait to continue..."
+        read -t 2 back
+        if [[ $? -eq 0 ]]; then
+            echo "🛑 Stopping Memory monitor."
+            break
+        
+        fi
+
         sleep $UPDATE_INTERVAL
     done
 }
@@ -112,6 +130,14 @@ monitor_network() {
         clear
         echo "🌐 Monitoring Network..."
         jq '.network' < $JSON_FILE
+
+        echo "\n⏳ Press [Enter] to stop monitoring or wait to continue..."
+        read -t 2 back
+        if [[ $? -eq 0 ]]; then
+            echo "🛑 Stopping Network monitor."
+            break
+        fi
+
         sleep $UPDATE_INTERVAL
     done
 }
@@ -121,6 +147,14 @@ monitor_all() {
         clear
         echo "🖥️ Monitoring All..."
         jq < $JSON_FILE
+
+        echo "\n⏳ Press [Enter] to stop monitoring or wait to continue..."
+        read -t 2 back
+        if [[ $? -eq 0 ]]; then
+            echo "🛑 Stopping All Resources monitor."
+            break
+        fi
+
         sleep $UPDATE_INTERVAL
     done
 }
@@ -154,9 +188,16 @@ monitor_process() {
             done
         fi
 
+        echo "\n⏳ Press [Enter] to stop monitoring or wait to continue..."
+        read -t 2 back
+        if [[ $? -eq 0 ]]; then
+            echo "🛑 Stopping Process monitor."
+            break
+
         sleep $UPDATE_INTERVAL
     done
 }
+
 
 serve_web_dashboard() {
     echo "🔹 Starting Web Dashboard..."
@@ -165,6 +206,9 @@ serve_web_dashboard() {
     echo "📡 Web server started at: http://localhost:$PORT"
     echo "🖥️ Dashboard at: http://localhost:$PORT/dashboard.html"
     sleep 2
+}
+input(){
+    timeout 2 read choice
 }
 
 show_optimization_tips() {
@@ -194,6 +238,7 @@ show_optimization_tips() {
 show_menu() {
     collect_data &
 
+
     while true; do
         echo "\nSelect what you want to monitor:"
         echo "1) Monitor CPU"
@@ -215,7 +260,7 @@ show_menu() {
             5) serve_web_dashboard ;;
             6) show_optimization_tips ;;
             8) monitor_process ;;
-            9) echo "👋 Exiting..."; pkill -P $$; exit 0 ;;
+            9) echo "👋 Exiting..."; pkill -P $$;pkill -f advanced_monitor.zsh; exit 0 ;;
             *) echo "❌ Invalid option." ;;
         esac
     done
