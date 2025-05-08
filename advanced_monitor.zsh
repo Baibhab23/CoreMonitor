@@ -1,157 +1,268 @@
 #!/bin/zsh
 
 LOG_FILE="system_monitor.log"
-CPU_THRESHOLD=80  # CPU usage alert threshold
-MEMORY_THRESHOLD=80  # Memory usage alert threshold
 HISTORY_FILE="usage_history.csv"
+JSON_FILE="monitor_data.json"
+UPDATE_INTERVAL=2
+CPU_THRESHOLD=80
+MEMORY_THRESHOLD=80
+DISK_THRESHOLD=85
+PORT=8082
+# choice=0
 
-# Function to log data
+# Trap to clean up background processes on Ctrl+C or exit
+trap "echo '🛑 Exiting... Cleaning up...'; pkill -P $$; exit" SIGINT SIGTERM
+
+# Kill if port already in use
+PID=$(lsof -ti tcp:$PORT)
+if [ -n "$PID" ]; then
+    kill -9 $PID
+fi
+
 log_data() {
     echo "$(date) - $1" >> $LOG_FILE
 }
 
-# Function to record usage history
 record_history() {
     TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
-    CPU_LOAD=$(top -l 1 | awk '/CPU usage/ {print $3}' | cut -d'%' -f1)
-    MEMORY_USED=$(vm_stat | awk '
-    /Pages active/ {active=$3*4096/1024/1024}
-    /Pages wired down/ {wired=$3*4096/1024/1024}
-    END {printf "%.2f", active + wired}')
-    
-    TOTAL_MEMORY=$(sysctl -n hw.memsize)
-    TOTAL_MEMORY_MB=$((TOTAL_MEMORY / 1024 / 1024))
-    MEMORY_PERCENT=$(echo "scale=2; ($MEMORY_USED / $TOTAL_MEMORY_MB) * 100" | bc)
-    
-    echo "$TIMESTAMP,$CPU_LOAD,$MEMORY_PERCENT" >> $HISTORY_FILE
+    echo "$TIMESTAMP,$1,$2" >> $HISTORY_FILE
 }
 
-# Function to monitor CPU & detect high usage
+collect_data() {
+    while true; do
+        TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
+        CPU=$(top -l 1 | awk '/CPU usage/ {print $3}' | cut -d'%' -f1)
+
+        MEMORY_USED=$(vm_stat | awk '
+            /Pages active/ {active=$3*4096/1024/1024}
+            /Pages wired down/ {wired=$3*4096/1024/1024}
+            END {printf "%.2f", active + wired}')
+        TOTAL_MEMORY=$(sysctl -n hw.memsize)
+        TOTAL_MB=$((TOTAL_MEMORY / 1024 / 1024))
+        MEM_PERCENT=$(echo "scale=2; ($MEMORY_USED / $TOTAL_MB) * 100" | bc)
+
+        DISK_USAGE=$(df -H / | awk 'NR==2 {print $5}' | sed 's/%//')
+
+        NETWORK_JSON=""
+        interfaces=($(networksetup -listallhardwareports | awk '/Device/ {print $2}'))
+        for iface in $interfaces; do
+            RX=$(netstat -bI $iface 2>/dev/null | awk 'NR==2 {print $7}')
+            TX=$(netstat -bI $iface 2>/dev/null | awk 'NR==2 {print $10}')
+            [[ -z "$RX" ]] && RX="0"
+            [[ -z "$TX" ]] && TX="0"
+            NETWORK_JSON="$NETWORK_JSON\"$iface\":{\"rx\":\"$RX bytes\",\"tx\":\"$TX bytes\"},"
+        done
+        NETWORK_JSON="{${NETWORK_JSON%,}}"
+
+        INTRUSIONS=$(last | grep "invalid" | wc -l)
+        UPTIME=$(uptime | awk -F'(up |,  load average: )' '{print $2}')
+
+        echo "{
+            \"timestamp\": \"$TIMESTAMP\",
+            \"cpu\": \"$CPU\",
+            \"memory\": {
+                \"percent\": \"$MEM_PERCENT\",
+                \"used\": \"$MEMORY_USED\",
+                \"total\": \"$TOTAL_MB\"
+            },
+            \"disk\": \"$DISK_USAGE%\",
+            \"network\": $NETWORK_JSON,
+            \"uptime\": \"$UPTIME\",
+            \"intrusions\": \"$INTRUSIONS\"
+        }" > $JSON_FILE
+
+        record_history "$CPU" "$MEM_PERCENT"
+
+        if (( ${CPU%.*} > $CPU_THRESHOLD )); then
+            echo -e "\a"
+            log_data "⚠️ High CPU usage detected: $CPU%"
+        fi
+        if (( ${MEM_PERCENT%.*} > $MEMORY_THRESHOLD )); then
+            echo -e "\a"
+            log_data "⚠️ High Memory usage detected: $MEM_PERCENT%"
+        fi
+        if (( DISK_USAGE > DISK_THRESHOLD )); then
+            echo -e "\a"
+            log_data "⚠️ High Disk usage detected: $DISK_USAGE%"
+        fi
+
+        sleep $UPDATE_INTERVAL
+    done
+}
+
 monitor_cpu() {
-    echo "🔹 Monitoring CPU Usage..."
-    CPU_LOAD=$(top -l 1 | awk '/CPU usage/ {print $3}' | cut -d'%' -f1)
-    echo "CPU Usage: $CPU_LOAD%"
-    
-    if (( $(echo "$CPU_LOAD > $CPU_THRESHOLD" | bc -l) )); then
-        echo "⚠️ High CPU Usage Detected ($CPU_LOAD%)"
-        log_data "High CPU usage detected: $CPU_LOAD%"
-    fi
+    while true; do
+        clear
+        echo "🧠 Monitoring CPU..."
+        jq '.cpu' < "$JSON_FILE"
+
+        echo "\n⏳ Press [Enter] to stop monitoring or wait to continue..."
+        read -t 2 back  
+        if [[ $? -eq 0 ]]; then
+            echo "🛑 Stopping CPU monitor."
+            break
+        fi
+
+        sleep $UPDATE_INTERVAL
+    done
 }
 
-# Function to monitor memory & detect high usage
 monitor_memory() {
-    echo "🔹 Monitoring Memory Usage..."
-    MEMORY_USED=$(vm_stat | awk '
-    /Pages active/ {active=$3*4096/1024/1024}
-    /Pages wired down/ {wired=$3*4096/1024/1024}
-    END {printf "%.2f", active + wired}')
-    
-    TOTAL_MEMORY=$(sysctl -n hw.memsize)
-    TOTAL_MEMORY_MB=$((TOTAL_MEMORY / 1024 / 1024))
-    MEMORY_PERCENT=$(echo "scale=2; ($MEMORY_USED / $TOTAL_MEMORY_MB) * 100" | bc)
-    
-    echo "Memory Usage: $MEMORY_PERCENT% ($MEMORY_USED MB / $TOTAL_MEMORY_MB MB)"
-    
-    if (( $(echo "$MEMORY_PERCENT > $MEMORY_THRESHOLD" | bc -l) )); then
-        echo "⚠️ High Memory Usage Detected ($MEMORY_PERCENT%)"
-        log_data "High Memory usage detected: $MEMORY_PERCENT%"
-    fi
+    while true; do
+        clear
+        echo "💾 Monitoring Memory..."
+        jq '.memory' < $JSON_FILE
+
+        echo "\n⏳ Press [Enter] to stop monitoring or wait to continue..."
+        read -t 2 back
+        if [[ $? -eq 0 ]]; then
+            echo "🛑 Stopping Memory monitor."
+            break
+        
+        fi
+
+        sleep $UPDATE_INTERVAL
+    done
 }
 
-# Function to detect suspicious processes
-detect_suspicious_processes() {
-    echo "🔹 Checking for Suspicious Processes..."
-    ps aux | awk '$3 > 50 {print "⚠️ High CPU Process:", $2, $11, "- CPU:", $3"%"}'
-}
-
-# Function to monitor network traffic
 monitor_network() {
-    echo "🔹 Monitoring Network Traffic..."
-    netstat -ib | awk 'NR>1 {print $1, "RX:", $7, "bytes | TX:", $10, "bytes"}' | uniq
+    while true; do
+        clear
+        echo "🌐 Monitoring Network..."
+        jq '.network' < $JSON_FILE
+
+        echo "\n⏳ Press [Enter] to stop monitoring or wait to continue..."
+        read -t 2 back
+        if [[ $? -eq 0 ]]; then
+            echo "🛑 Stopping Network monitor."
+            break
+        fi
+
+        sleep $UPDATE_INTERVAL
+    done
 }
 
-# Function to detect intrusion attempts
-detect_intrusions() {
-    echo "🔹 Checking for Unauthorized Login Attempts..."
-    last | grep "invalid" | tail -n 5
-}
-
-# Function to provide system optimization suggestions
-suggest_optimizations() {
-    echo "🔹 Optimization Suggestions:"
-    echo "→ Close unused applications to free up memory."
-    echo "→ Reduce browser tabs to decrease RAM usage."
-    echo "→ Use Activity Monitor to check for background processes."
-    echo "→ Enable macOS power-saving mode to extend battery life."
-}
-
-# Function to display historical usage trends
-show_usage_trends() {
-    echo "🔹 CPU & Memory Usage Trends:"
-    tail -n 10 $HISTORY_FILE | column -t -s ','
-}
-
-# Function to serve system stats via a simple web API
-serve_web_dashboard() {
-    echo "🔹 Starting Web Dashboard... (Ctrl+C to stop)"
-    python3 -m http.server 8080 &
-    echo "Access system stats at: http://localhost:8080"
-}
-
-# Function to monitor everything
 monitor_all() {
-    echo "\n🖥️ Advanced System Monitoring\n"
-    monitor_cpu
-    echo ""
-    monitor_memory
-    echo ""
-    detect_suspicious_processes
-    echo ""
-    monitor_network
-    echo ""
-    detect_intrusions
-    echo ""
-    show_usage_trends
-    echo ""
-    suggest_optimizations
+    while true; do
+        clear
+        echo "🖥️ Monitoring All..."
+        jq < $JSON_FILE
+
+        echo "\n⏳ Press [Enter] to stop monitoring or wait to continue..."
+        read -t 2 back
+        if [[ $? -eq 0 ]]; then
+            echo "🛑 Stopping All Resources monitor."
+            break
+        fi
+
+        sleep $UPDATE_INTERVAL
+    done
 }
 
-# Menu to select monitoring options
+monitor_process() {
+    echo -n "🔍 Enter process name to watch: "; read pname
+
+    while true; do
+        clear
+        echo "🔎 Monitoring process: $pname"
+        matches=$(ps -e -o pid,comm,%cpu,%mem | grep -i "$pname" | grep -v "grep")
+
+        if [[ -z "$matches" ]]; then
+            echo "❌ No process named '$pname' is currently running."
+        else
+            echo "PID    COMMAND           CPU%   MEM%"
+            echo "$matches" | while read pid command cpu mem; do
+                printf "%-6s %-16s %-6s %-6s\n" "$pid" "$command" "$cpu" "$mem"
+
+                # Optional alerts
+                cpu_int=${cpu%.*}
+                mem_int=${mem%.*}
+                if (( cpu_int > CPU_THRESHOLD )); then
+                    echo -e "\a⚠️ High CPU usage: $cpu% by $command"
+                    log_data "⚠️ $command using high CPU: $cpu%"
+                fi
+                if (( mem_int > MEMORY_THRESHOLD )); then
+                    echo -e "\a⚠️ High Memory usage: $mem% by $command"
+                    log_data "⚠️ $command using high Memory: $mem%"
+                fi
+            done
+        fi
+
+        echo "\n⏳ Press [Enter] to stop monitoring or wait to continue..."
+        read -t 2 back
+        if [[ $? -eq 0 ]]; then
+            echo "🛑 Stopping Process monitor."
+            break
+        fi
+
+        sleep $UPDATE_INTERVAL
+    done
+}
+serve_web_dashboard() {
+    echo "🔹 Starting Web Dashboard..."
+    cd "$(dirname "$0")"
+    python3 -m http.server $PORT > /dev/null 2>&1 &
+    echo "📡 Web server started at: http://localhost:$PORT"
+    echo "🖥️ Dashboard at: http://localhost:$PORT/dashboard.html"
+    sleep 2
+}
+input(){
+    timeout 2 read choice
+}
+
+show_optimization_tips() {
+    echo "\n📋 Suggested Measures to Optimize Resource Usage:"
+    echo "--------------------------------------------------"
+    echo "🧠 CPU:"
+    echo "  - Close unused applications or browser tabs."
+    echo "  - Identify high CPU tasks with 'top' or 'htop'."
+    echo "  - Restart heavy apps, reduce animations."
+    echo ""
+    echo "💾 Memory:"
+    echo "  - Close memory-hungry apps (e.g., IDEs, browsers)."
+    echo "  - Use Activity Monitor to spot hogs."
+    echo "  - Consider system restart if memory pressure is high."
+    echo ""
+    echo "📀 Disk:"
+    echo "  - Clear cache and logs using CleanMyMac or manual commands."
+    echo "  - Remove unused apps and files in Downloads."
+    echo ""
+    echo "🌐 Network:"
+    echo "  - Use 'nettop' or 'lsof -i' to see active connections."
+    echo "  - Stop large downloads or background sync apps."
+    echo "  - Switch to a better network or use Ethernet."
+    echo "--------------------------------------------------"
+}
+
 show_menu() {
+    collect_data &
+
+
     while true; do
         echo "\nSelect what you want to monitor:"
-        echo "1) CPU Usage & Alerts"
-        echo "2) Memory Usage & Alerts"
-        echo "3) Suspicious Processes"
-        echo "4) Network Stats"
-        echo "5) Intrusion Detection"
-        echo "6) Usage Trends"
-        echo "7) System Optimization Suggestions"
-        echo "8) Start Web Dashboard"
-        echo "9) Show Everything"
-        echo "10) Exit"
-        
-        echo -n "Enter your choice: "; read choice
+        echo "1) Monitor CPU"
+        echo "2) Monitor Memory"
+        echo "3) Monitor Network"
+        echo "4) Monitor All"
+        echo "5) Start Web Dashboard"
+        echo "6) Optimization Tips"
+        echo "7) Show All"
+        echo "8) Monitor Specific Process"
+        echo "9) Exit"
+        echo -n "Enter choice: "; read choice
 
         case $choice in
             1) monitor_cpu ;;
             2) monitor_memory ;;
-            3) detect_suspicious_processes ;;
-            4) monitor_network ;;
-            5) detect_intrusions ;;
-            6) show_usage_trends ;;
-            7) suggest_optimizations ;;
-            8) serve_web_dashboard ;;
-            9) monitor_all ;;
-            10) echo "Exiting..."; exit 0 ;;
-            *) echo "Invalid option, please try again." ;;
+            3) monitor_network ;;
+            4|7) monitor_all ;;  # 7 is an alias for 4
+            5) serve_web_dashboard ;;
+            6) show_optimization_tips ;;
+            8) monitor_process ;;
+            9) echo "👋 Exiting..."; pkill -P $$;pkill -f advanced_monitor.zsh; exit 0 ;;
+            *) echo "❌ Invalid option." ;;
         esac
-
-        echo "\n----------------------------"
-        record_history  # Record system stats after every selection
     done
 }
 
-# Run the menu
 show_menu
-

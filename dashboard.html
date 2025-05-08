@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .data {
+            margin-bottom: 10px;
+        }
+        .data span {
+            font-weight: bold;
+        }
+        .warning {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>System Dashboard</h1>
+    <div id="cpu" class="data">CPU: Loading...</div>
+    <div id="memory" class="data">Memory: Loading...</div>
+    <div id="disk" class="data">Disk Usage: Loading...</div>
+    <div id="network" class="data">Network: Loading...</div>
+    <div id="battery" class="data">Battery: Loading...</div>
+    <div id="uptime" class="data">Uptime: Loading...</div>
+
+    <script>
+        function updateDashboard() {
+            fetch('monitor_data.json')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('cpu').innerHTML = `CPU: ${data.cpu}%`;
+                    document.getElementById('memory').innerHTML = `Memory: ${data.memory.percent}% (Used: ${data.memory.used}MB, Total: ${data.memory.total}MB)`;
+                    document.getElementById('disk').innerHTML = `Disk Usage: ${data.disk}%`;
+                    document.getElementById('network').innerHTML = `Network: ${JSON.stringify(data.network)}`;
+                    document.getElementById('battery').innerHTML = `Battery: ${data.battery}`;
+                    document.getElementById('uptime').innerHTML = `Uptime: ${data.uptime}`;
+                    
+                    // Optionally, add warnings
+                    if (data.cpu > 80) {
+                        document.getElementById('cpu').classList.add('warning');
+                    } else {
+                        document.getElementById('cpu').classList.remove('warning');
+                    }
+                    if (data.memory.percent > 80) {
+                        document.getElementById('memory').classList.add('warning');
+                    } else {
+                        document.getElementById('memory').classList.remove('warning');
+                    }
+                    if (data.disk > 85) {
+                        document.getElementById('disk').classList.add('warning');
+                    } else {
+                        document.getElementById('disk').classList.remove('warning');
+                    }
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+
+        // Update the dashboard every 5 seconds
+        setInterval(updateDashboard, 5000);
+
+        // Initial load
+        updateDashboard();
+    </script>
+</body>
+</html>
