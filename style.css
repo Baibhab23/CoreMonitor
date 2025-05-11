@@ -1,0 +1,21 @@
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+}
+
+.data {
+    margin-bottom: 10px;
+}
+
+.data span {
+    font-weight: bold;
+}
+
+.warning {
+    color: red;
+}
+
+canvas {
+    max-width: 100%;
+    margin-top: 20px;
+}
