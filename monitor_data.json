@@ -1,13 +1,14 @@
 {
-            "timestamp": "2025-05-12 12:32:31",
-            "cpu": "2.33",
+            "timestamp": "2025-05-12 18:31:56",
+            "cpu": "3.87",
             "memory": {
                 "percent": "7.00",
-                "used": "1421.16",
+                "used": "1293.98",
                 "total": "18432"
             },
             "disk": "3%",
-            "network": {"en4":{"rx":"0 bytes","tx":"0 bytes"},"en5":{"rx":"0 bytes","tx":"0 bytes"},"en6":{"rx":"0 bytes","tx":"0 bytes"},"bridge0":{"rx":"0 bytes","tx":"0 bytes"},"en0":{"rx":"0 bytes","tx":"67067364 bytes"},"en1":{"rx":"0 bytes","tx":"0 bytes"},"en2":{"rx":"0 bytes","tx":"0 bytes"},"en3":{"rx":"0 bytes","tx":"0 bytes"}},
-            "uptime": " 3:27, 1 user, load averages: 2.13 2.95 2.95",
-            "intrusions": "       0"
+            "network": {"en4":{"rx":"0 bytes","tx":"0 bytes"},"en5":{"rx":"0 bytes","tx":"0 bytes"},"en6":{"rx":"0 bytes","tx":"0 bytes"},"bridge0":{"rx":"0 bytes","tx":"0 bytes"},"en0":{"rx":"0 bytes","tx":"164042776 bytes"},"en1":{"rx":"0 bytes","tx":"0 bytes"},"en2":{"rx":"0 bytes","tx":"0 bytes"},"en3":{"rx":"0 bytes","tx":"0 bytes"}},
+            "uptime": " 9:26, 2 users, load averages: 1.92 2.30 2.20",
+            "intrusions": "       0",
+            "health_score": "100"
         }

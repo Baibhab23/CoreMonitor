@@ -5,10 +5,23 @@ function updateDashboard() {
             document.getElementById('cpu').innerHTML = `CPU: ${data.cpu}%`;
             document.getElementById('memory').innerHTML = `Memory: ${data.memory.percent}% (Used: ${data.memory.used}MB, Total: ${data.memory.total}MB)`;
             document.getElementById('disk').innerHTML = `Disk Usage: ${data.disk}%`;
-            document.getElementById('network').innerHTML = `Network: ${JSON.stringify(data.network)}`;
             document.getElementById('battery').innerHTML = `Battery: ${data.battery}`;
             document.getElementById('uptime').innerHTML = `Uptime: ${data.uptime}`;
 
+            // Update network information in a more readable format
+            let networkInfo = '';
+            for (let iface in data.network) {
+                networkInfo += `
+                    <div class="network-interface">
+                        <strong>${iface}</strong><br>
+                        RX: ${data.network[iface].rx}<br>
+                        TX: ${data.network[iface].tx}<br><br>
+                    </div>
+                `;
+            }
+            document.getElementById('network').innerHTML = networkInfo;
+
+            // Update warning classes based on thresholds
             data.cpu > 80
                 ? document.getElementById('cpu').classList.add('warning')
                 : document.getElementById('cpu').classList.remove('warning');
@@ -23,6 +36,7 @@ function updateDashboard() {
         })
         .catch(error => console.error('Error fetching monitor_data.json:', error));
 }
+
 
 async function loadCSVCharts() {
     const response = await fetch('usage_history.csv');

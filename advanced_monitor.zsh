@@ -100,6 +100,19 @@ collect_data() {
         INTRUSIONS=$(last | grep "invalid" | wc -l)
         UPTIME=$(uptime | awk -F'(up |,  load average: )' '{print $2}')
 
+        # Calculate Health Score (example: based on thresholds for CPU, memory, and disk usage)
+        HEALTH_SCORE=100
+        if (( ${CPU%.*} > 80 )); then
+            HEALTH_SCORE=$((HEALTH_SCORE - 20))  # Deduct points for high CPU usage
+        fi
+        if (( ${MEM_PERCENT%.*} > 80 )); then
+            HEALTH_SCORE=$((HEALTH_SCORE - 20))  # Deduct points for high memory usage
+        fi
+        if (( DISK_USAGE > 85 )); then
+            HEALTH_SCORE=$((HEALTH_SCORE - 20))  # Deduct points for high disk usage
+        fi
+
+        # Save the data to JSON
         echo "{
             \"timestamp\": \"$TIMESTAMP\",
             \"cpu\": \"$CPU\",
@@ -111,29 +124,33 @@ collect_data() {
             \"disk\": \"$DISK_USAGE%\",
             \"network\": $NETWORK_JSON,
             \"uptime\": \"$UPTIME\",
-            \"intrusions\": \"$INTRUSIONS\"
+            \"intrusions\": \"$INTRUSIONS\",
+            \"health_score\": \"$HEALTH_SCORE\"
         }" > $JSON_FILE
 
         record_history "$CPU" "$MEM_PERCENT"
 
+        # Generate warnings and suggestions
         if (( ${CPU%.*} > CPU_THRESHOLD )); then
             echo -e "\a"; say "Warning. High CPU usage."
-            log_data "⚠️ High CPU usage detected: $CPU%"
+            log_data "⚠️ High CPU usage detected: $CPU%. Try closing unused apps."
         fi
         if (( ${MEM_PERCENT%.*} > MEMORY_THRESHOLD )); then
             echo -e "\a"; say "Warning. High memory usage."
-            log_data "⚠️ High Memory usage detected: $MEM_PERCENT%"
+            log_data "⚠️ High Memory usage detected: $MEM_PERCENT%. Consider closing memory-heavy applications."
         fi
         if (( DISK_USAGE > DISK_THRESHOLD )); then
             echo -e "\a"; say "Warning. Disk usage critical."
-            log_data "⚠️ High Disk usage detected: $DISK_USAGE%"
+            log_data "⚠️ High Disk usage detected: $DISK_USAGE%. Consider clearing old files."
         fi
 
+        # Check idle time
         check_idle_time &
 
         sleep $UPDATE_INTERVAL
     done
 }
+
 
 monitor_health() {
     while true; do
@@ -183,6 +200,7 @@ analyze_trends() {
     fi
 
     echo ""
+    sleep $UPDATE_INTERVAL
 }
 
 monitor_cpu() {
@@ -300,15 +318,31 @@ monitor_disk() {
 monitor_all() {
     while true; do
         clear
-        echo "🖥️ Monitoring All..."
-        jq < $JSON_FILE
+        # Collect data and show the system stats
+        CPU=$(jq -r '.cpu' $JSON_FILE)
+        MEM_USED=$(jq -r '.memory.used' $JSON_FILE)
+        MEM_TOTAL=$(jq -r '.memory.total' $JSON_FILE)
+        MEM_PERCENT=$(jq -r '.memory.percent' $JSON_FILE)
+        DISK=$(jq -r '.disk' $JSON_FILE)
+        UPTIME=$(jq -r '.uptime' $JSON_FILE)
+        INTRUSIONS=$(jq -r '.intrusions' $JSON_FILE)
 
-        echo "\n⏳ Press [Enter] to stop monitoring or wait to continue..."
+        echo "🧠 CPU Usage: $CPU%"
+        draw_bar ${CPU%.*}
+        echo "💾 Memory: $MEM_USED MB / $MEM_TOTAL MB ($MEM_PERCENT%)"
+        draw_bar ${MEM_PERCENT%.*}
+        echo "📀 Disk Usage: $DISK"
+        draw_bar ${DISK%\%}
+        echo "🕒 Uptime: $UPTIME"
+        echo "🚨 Intrusions: $INTRUSIONS"
+
+        # Network status
+        echo "🌐 Network:"
+        jq -r '.network | to_entries[] | "   \(.key): RX=\(.value.rx), TX=\(.value.tx)"' $JSON_FILE
+
+        echo "⏳ Press [Enter] to stop monitoring or wait to continue..."
         read -t 2 back
-        if [[ $? -eq 0 ]]; then
-            echo "🛑 Stopping All Resources monitor."
-            break
-        fi
+        [[ $? -eq 0 ]] && echo "🛑 Stopping All Resources monitor." && break
 
         sleep $UPDATE_INTERVAL
     done
@@ -398,31 +432,28 @@ show_menu() {
     echo "1) Monitor CPU"
     echo "2) Monitor Memory"
     echo "3) Monitor Network"
-    echo "4) Monitor All"
+    echo "4) Monitor Disk"
     echo "5) Start Web Dashboard"
     echo "6) Optimization Tips"
-    echo "7) Show All"
-    echo "8) Monitor Specific Process"
-    echo "9) Exit"
-    echo "10) Monitor Health Score + Graphs"
-    echo "11) Analyze CPU/Memory Trends"
-    echo "12) Monitor Disk"
-    # echo "13) Identify Heaviest Process + Optimization Tips"
+    echo "7) Monitor Specific Process"
+    echo "8) Monitor Health Score + Graphs"
+    echo "9) Analyze CPU/Memory Trends"
+    echo "10) Show All"
+    echo "11) Exit"
     echo -n "Enter choice: "; read choice
 
     case $choice in
         1) monitor_cpu ;;
         2) monitor_memory ;;
         3) monitor_network ;;
-        4|7) monitor_all ;;  # 7 is an alias for 4
+        4) monitor_disk ;;
         5) serve_web_dashboard ;;
         6) show_optimization_tips ;;
-        8) monitor_process ;;
-        9) echo "👋 Exiting..."; pkill -P $$; pkill -f advanced_monitor.zsh; exit 0 ;;
-        10) monitor_health ;;
-        11) analyze_trends ;;
-        12) monitor_disk ;;
-        # 13) monitor_heaviest_process ;;
+        7) monitor_process ;;
+        8) monitor_health ;;
+        9) analyze_trends ;;
+        10) monitor_all ;;
+        11) echo "👋 Exiting..."; pkill -P $$; pkill -f advanced_monitor.zsh; exit 0 ;;
         *) echo "❌ Invalid option." ;;
     esac
 done

@@ -19,3 +19,18 @@ canvas {
     max-width: 100%;
     margin-top: 20px;
 }
+.network-interface {
+    padding: 10px;
+    border: 1px solid #ccc;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+
+.network-interface strong {
+    font-size: 1.2em;
+    color: #333;
+}
+
+.network-interface br {
+    margin: 5px 0;
+}
