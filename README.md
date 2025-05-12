@@ -1,2 +1,4 @@
 # CoreMonitor
-Advanced monitoring system dashboard
+Advanced monitoring system dashboard is a lightweight, browser-based tool designed to give users real-time and historical insights into their machine's performance. Built using Zsh scripting on the backend and a clean HTML/CSS/JavaScript frontend, this project provides a modular and interactive way to monitor CPU usage, memory, disk activity, network statistics, battery levels, and system uptime.
+
+At its core, a Zsh script continuously collects live system data and logs it in both JSON and CSV formats. The JSON data feeds directly into the frontend to display up-to-the-second metrics, while the CSV file (usage_history.csv) builds a growing log of usage history, which is visualized via dynamic charts. This dual-structure ensures that users not only monitor their system live but can also observe patterns and analyze past performance for better decision-making.
